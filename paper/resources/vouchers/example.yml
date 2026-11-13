@@ -1,0 +1,55 @@
+# A voucher: the file's name is its name, so this is redeemed with /redeem example.
+# Edit it, copy it for more vouchers, and run /redeem admin reload. This file is only written when the vouchers folder is missing.
+# Give it to a player with: /redeem admin give <player> example [amount]
+
+# What players see. Colors, hex and MiniMessage work.
+name: "&6Starter Crate"
+description:
+  - "&7A few things to get you going."
+# The item the menu draws: diamond, head:<player>, nexo:<id>, itemsadder:<id>...
+material: chest
+
+# false: a voucher players hold, given with /redeem admin give; redeeming uses one up.
+# true: nobody holds anything and anyone the conditions let through can redeem it, for a daily reward or a one-time gift.
+free: false
+# Who sees it in the menu: ALWAYS, HELD (only players who hold one, everyone for a free voucher) or READY (only when redeemable now).
+show: HELD
+# How long to wait after redeeming before redeeming again, and how often one player can redeem it ever (0 for no limit).
+cooldown: 0s
+max-redemptions: 0
+
+# All of these must hold. Each can carry a message to tell the player instead of the default.
+conditions:
+  # Free slots in the inventory, so that nothing is lost.
+  - type: inventory-space
+    slots: 2
+  # - type: permission
+  #   node: myserver.vip
+  #   message: "&cThis one is for VIPs."
+  # - type: permission-any
+  #   nodes: [myserver.vip, myserver.staff]
+  # - type: no-permission
+  #   node: myserver.banned
+  # - type: world
+  #   worlds: [world, world_nether]
+  # - type: playtime
+  #   min: 2h
+  # - type: placeholder
+  #   value: "%vault_eco_balance%"
+  #   operator: ">="
+  #   expected: "100"
+
+# What redeeming does. {player}, {uuid}, {voucher} and {name} are filled in, and PlaceholderAPI's placeholders if it is installed.
+rewards:
+  commands:
+    - "give {player} diamond 3"
+  # player-commands:
+  #   - "spawn"
+  items:
+    - material: bread
+      amount: 16
+      name: "&eStarter Bread"
+  message:
+    - "&aYou opened the &6Starter Crate&a!"
+  # broadcast:
+  #   - "&e{player} &7opened a &6Starter Crate&7."
