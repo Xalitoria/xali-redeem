@@ -30,7 +30,7 @@ import kotlin.math.max
  */
 class RedeemCommand(private val plugin: XaliRedeem) {
     val label = LABEL
-    val aliases = listOf("redeem", "vouchers", "voucher", "xredeem")
+    val aliases = listOf("redeem", "xredeem", "vouchers", "xvouchers", "voucher", "xvoucher")
     val description = "Redeem vouchers"
 
     private val msg get() = plugin.messageConfig.data
@@ -83,7 +83,7 @@ class RedeemCommand(private val plugin: XaliRedeem) {
         )
         .then(Commands.literal("reload").executes { run(it) { sender -> reload(sender) } })
         .then(Commands.literal("debug").executes {
-            run(it) { sender -> sender send if (plugin.toggleDebug()) msg.commands.debugOn else msg.commands.debugOff }
+            run(it) { sender -> sender send msg.commands.debug.get(plugin.toggleDebug()) }
         })
 
     // --- Arguments ------------------------------------------------------------------------------------------

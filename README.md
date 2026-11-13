@@ -9,6 +9,17 @@ reward or a one-time gift.
 The menu is [XaliMenu](../menu/README.md)'s, and optional: with `menu.enabled: false`, or without XaliMenu, `/redeem` lists
 the vouchers in chat, each one a click away from being redeemed, and everything else works the same.
 
+## Contents
+
+- [Installation](#installation): [Requirements](#requirements), [Modules](#modules),
+  [Building and installing](#building-and-installing), [Removal](#removal)
+- [How it works](#how-it-works)
+- [Configuration](#configuration): [Files](#files), [config.yml](#configyml), [Vouchers](#vouchers), [The menu](#the-menu)
+- [Usage](#usage): [Commands](#commands), [Placeholders](#placeholders),
+  [Handing out vouchers from other plugins](#handing-out-vouchers-from-other-plugins)
+- [Development](#development)
+- [See also](#see-also)
+
 ## Installation
 
 ### Requirements
@@ -34,6 +45,11 @@ Copy `build/libs/redeem/xali-redeem-<version>-paper.jar` into `plugins`. The des
 [Gradle plugin](../xali-gradle/README.md); the `paper { }` block is in `redeem/build.gradle.kts`. The plugin loads after XaliMenu
 and PlaceholderAPI when they are installed. The API of XaliMenu is not bundled: it comes from XaliMenu's jar when `menu.enabled`
 is on, and nothing of it is loaded otherwise.
+
+### Removal
+
+Delete the jar. `plugins/XaliRedeem/`, the table `<prefix>holding` and `plugins/XaliMenu/menus/redeem.conf` stay. Delete
+the menu file too, or XaliMenu reports a menu that names an action that is gone.
 
 ## How it works
 
@@ -150,7 +166,7 @@ not need `commands` (`register = false`): `/redeem` opens it.
 
 ### Commands
 
-`/xaliredeem`, also `/redeem`, `/vouchers`, `/voucher` and `/xredeem`.
+`/xaliredeem`, also `/redeem`, `/xredeem`, `/vouchers`, `/xvouchers`, `/voucher` and `/xvoucher`.
 
 | Command | Permission | Does |
 |---|---|---|
@@ -186,10 +202,36 @@ PlaceholderAPI answers from memory (what is known of players who are online), ne
 
 There is no API to compile against: run `/xaliredeem admin give {player} <voucher> [amount]` as the console, from a vote reward
 ([XaliVote](../vote/README.md)), a shop, a crate, a referral completion ([XaliRefer](../refer/README.md)) or a menu action.
+For example, in XaliVote's `rewards.yml`:
+
+**File** `plugins/XaliVote/rewards.yml`
+
+```yaml
+basic-vote:
+  commands:
+    - "xaliredeem admin give {player} vote-crate 1"
+```
 
 ## Development
 
-Run Gradle from the workspace root (`/mount/storage/Code/kotlin/xali`):
+### Source layout
+
+Everything is in `redeem/paper` (`mc.xalitoria.redeem.paper`), so there is no `common` or `velocity`:
+
+| Package | Holds |
+|---|---|
+| `XaliRedeem.kt` | The composition root: wires everything in `onEnable`. |
+| `voucher` | `Voucher` (the file's model), `Vouchers` (reading the folder), `Condition` (a sealed interface, read with kaml's `PolymorphismStyle.Property` and the key `type`) and `Status` (why a voucher cannot be redeemed). |
+| `service` | `RedeemService` (check, use up, check again, run, give back) and `RewardRunner` (commands, items, messages). |
+| `data/db` | `HoldingTable` (player, voucher, amount, redeemed, last) and `HoldingRepository`. Redeeming is one transaction, so two servers cannot spend the last voucher twice. |
+| `data/config`, `data/model` | `MainConfig`, `MessageConfig` and the model classes. |
+| `command`, `listener` | `RedeemCommand` (Brigadier) and `PlayerListener`. |
+| `external` | `MenuHook` (the only class that touches XaliMenu's API), `RedeemExpansion` and `Placeholders` (PlaceholderAPI). |
+| `resources` | `vouchers/example.yml` and `menu/redeem.conf`, the files written on the first start. |
+
+### Testing
+
+Run Gradle from the workspace root:
 
 ```console
 user $ ./gradlew :redeem:paper:test
@@ -199,3 +241,36 @@ The tests read the voucher files (including the example), the conditions' compar
 a real SQLite file: holding, giving, taking, cooldowns, limits, giving back, and several redeems racing for the last voucher.
 What they cannot show (the plugin on a Folia server with XaliMenu, a player clicking the menu) is checked with the live harness of
 `menu/live`: set it up with `menu/live/setup.sh`, copy the jar of this plugin into `$XM_DIR/server/plugins` and join with a bot.
+
+| Test | Covers |
+|---|---|
+| `VoucherFiles` | Reading voucher files, the bundled example and misspelled keys. |
+| `HoldingStore` | The database rules: holding, giving, taking, cooldowns, limits, giving back, and redeems racing for the last voucher. |
+| `ConfigFile` | The defaults and wrong values of `config.yml`. |
+
+**Adding a condition**
+
+1. Add a `@Serializable` class with a `@SerialName` (the `type` of the file) implementing `Condition` in `voucher/Condition.kt`:
+   `test(player)` runs on the player's thread and must be cheap, and `validate()` reports a wrong setting.
+2. Add its default text to `MessageConfig` (the `when` that picks the message for a failed condition) and to the language file.
+3. Add a case to `VoucherFiles`, and a row to the table under [Vouchers](#vouchers).
+
+**Adding a reward**
+
+1. Add the key to `Rewards` in `voucher/Voucher.kt` and run it in `RewardRunner`, in the order the table lists.
+2. Fill in the placeholders the other rewards get, and test it through `VoucherFiles`.
+
+> [!NOTE]
+> XaliMenu strips colors from the values of a catalog. Formatted text (the name, the description, the status) reaches the
+> menu through `%xaliredeem_...%` placeholders, not through `{name}`.
+
+## See also
+
+- [XaliMenu](../menu/README.md) — the menus, catalogs and actions XaliRedeem registers
+- [XaliVote](../vote/README.md) and [XaliRefer](../refer/README.md) — plugins that can hand out vouchers
+- [Gradle plugin](../xali-gradle/README.md) — descriptors and library loading
+- [Root README](../README.md) — the workspace
+
+## External resources
+
+- [PlaceholderAPI](https://wiki.placeholderapi.com/) — the placeholders

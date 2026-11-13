@@ -1,3 +1,4 @@
+import com.xalitoria.util.message.TimeWords
 import com.xalitoria.util.config.DatabaseType
 import com.xalitoria.util.config.YamlFile
 import com.xalitoria.util.config.databaseType
@@ -51,7 +52,7 @@ class ConfigFile {
 
     @Test
     fun `times are written in words`() {
-        val words = MessageConfig.Words()
+        val words = TimeWords()
         assertEquals("0 seconds", words.duration(0))
         assertEquals("1 second", words.duration(1))
         assertEquals("2 hours", words.duration(7200))
@@ -69,7 +70,7 @@ class ConfigFile {
 
     @Test
     fun `a condition tells the player its own message first`() {
-        val words = MessageConfig.Words()
+        val words = TimeWords()
         val messages = MessageConfig.Conditions()
         assertEquals("You need 3 free inventory slots.", messages.failure(Condition.InventorySpace(3), words))
         assertEquals("Only for VIPs", messages.failure(Condition.Permission("vip", "Only for VIPs"), words))

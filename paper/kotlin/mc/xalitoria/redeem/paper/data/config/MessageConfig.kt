@@ -1,11 +1,17 @@
 package mc.xalitoria.redeem.paper.data.config
 
+import com.charleskorn.kaml.YamlComment
+import com.xalitoria.util.message.TimeWords
 import com.xalitoria.util.message.formatArgs
+import com.xalitoria.util.serial.message.State
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import mc.xalitoria.redeem.paper.voucher.Condition
 
-private const val PREFIX = "{#f80>}&lXALI{#fd0<}&f&lREDEEM &7> "
+/** What every heading starts with: the same colors in every Xali plugin. */
+private const val HEAD = "{#a0a>}&lXALI{#fff<}&f&lREDEEM &7>"
+
+private const val PREFIX = "$HEAD "
 
 /** Every message the plugin sends, in `language/<language>.yml`. `{0}`, `{1}`... are filled in by the plugin. */
 @Serializable
@@ -17,7 +23,8 @@ data class MessageConfig(
     val conditions: Conditions = Conditions(),
     val list: Listing = Listing(),
     val admin: Admin = Admin(),
-    val words: Words = Words(),
+    @YamlComment("The units of a time such as \"1 hour 5 minutes\": the words of the language, and what goes between the parts.")
+    val words: TimeWords = TimeWords(),
 ) {
     @Serializable
     data class Commands(
@@ -26,35 +33,33 @@ data class MessageConfig(
         @SerialName("player-only")
         val playerOnly: String = "You must be a player to use this command.",
         @SerialName("player-not-found")
-        private val playerNotFound: String = "No player called {0} is known to this server.",
+        private val playerNotFound: String = "No player called {0} has joined.",
         @SerialName("not-a-number")
         private val notANumber: String = "{0} is not a number.",
         private val usage: String = "Usage: {0}",
         @SerialName("menu-off")
         val menuOff: String = "&cThe voucher menu is not turned on; use /redeem list.",
         private val help: String = """
-            {#f80>}&lXALI{#fd0<}&f&lREDEEM &7> &6HELP
-            &6/{0} &r- open the voucher menu (or list your vouchers)
-            &6/{0} &rlist [page] &7- your vouchers in chat
-            &6/{0} &r<voucher> &7- redeem a voucher
+            $HEAD &dHELP
+            &d/{0} &r- open the voucher menu (or list your vouchers)
+            &d/{0} &rlist [page] &7- your vouchers in chat
+            &d/{0} &r<voucher> &7- redeem a voucher
         """.trimIndent(),
         private val adminHelp: String = """
-            &6/{0} &radmin give <player> <voucher> [amount] &7- give a player vouchers
-            &6/{0} &radmin take <player> <voucher> [amount] &7- take vouchers away
-            &6/{0} &radmin balance <player> &7- what a player holds and has used
-            &6/{0} &radmin reset <player> <voucher> &7- start a player's cooldown and limit of a voucher again
-            &6/{0} &radmin open <player> &7- open the menu for a player
-            &6/{0} &radmin reload|debug
+            &d/{0} &radmin give <player> <voucher> [amount] &7- give a player vouchers
+            &d/{0} &radmin take <player> <voucher> [amount] &7- take vouchers away
+            &d/{0} &radmin balance <player> &7- what a player holds and has used
+            &d/{0} &radmin reset <player> <voucher> &7- start a player's cooldown and limit of a voucher again
+            &d/{0} &radmin open <player> &7- open the menu for a player
+            &d/{0} &radmin reload|debug
         """.trimIndent(),
-        private val reload: String = "Reloaded the configuration and {0} vouchers.",
+        private val reload: String = "Configuration reloaded: {0} vouchers.",
         @SerialName("reload-failed")
         private val reloadFailed: String = "The configuration was not reloaded: {0}",
         @SerialName("voucher-error")
         private val voucherError: String = "Voucher not loaded, {0}",
-        @SerialName("debug-on")
-        val debugOn: String = "Debug logging is on.",
-        @SerialName("debug-off")
-        val debugOff: String = "Debug logging is off.",
+        @YamlComment("Said when /<command> admin debug turns the debug log on or off.")
+        val debug: State = State("Debug logging is on.", "Debug logging is off."),
         @SerialName("unexpected-error")
         val unexpectedError: String = "An unexpected error occurred. Please try again.",
     ) {
@@ -120,7 +125,7 @@ data class MessageConfig(
         val placeholder: String = "You don't meet the requirements for this.",
     ) {
         /** The text for [condition], which has its own `message` first. */
-        fun failure(condition: Condition, words: Words): String = condition.message ?: when (condition) {
+        fun failure(condition: Condition, words: TimeWords): String = condition.message ?: when (condition) {
             is Condition.InventorySpace -> inventorySpace.formatArgs(condition.slots)
             is Condition.Permission, is Condition.PermissionAny -> permission
             is Condition.NoPermission -> noPermission
@@ -132,9 +137,9 @@ data class MessageConfig(
 
     @Serializable
     data class Listing(
-        private val header: String = "$PREFIX&6Your vouchers &7(page {0} of {1})",
+        private val header: String = "$PREFIX&dYour vouchers &7(page {0} of {1})",
         val empty: String = "&7You have nothing to redeem.",
-        private val entry: String = "&6{0} &7x{1} &8- {2}",
+        private val entry: String = "&d{0} &7x{1} &8- {2}",
         @SerialName("click-to-redeem")
         val clickToRedeem: String = "Click to redeem",
     ) {
@@ -150,9 +155,9 @@ data class MessageConfig(
         private val noneToTake: String = "&c{0} holds no {1}&c.",
         private val received: String = "$PREFIX&aYou received &f{0} x &r{1}&a. Use &e/redeem&a to redeem.",
         @SerialName("balance-header")
-        private val balanceHeader: String = "$PREFIX&6{0}'s vouchers",
+        private val balanceHeader: String = "$PREFIX&d{0}'s vouchers",
         @SerialName("balance-entry")
-        private val balanceEntry: String = "&6{0} &7holds &f{1}&7, redeemed &f{2}&7 times, last {3}",
+        private val balanceEntry: String = "&d{0} &7holds &f{1}&7, redeemed &f{2}&7 times, last {3}",
         @SerialName("balance-empty")
         val balanceEmpty: String = "&7Nothing yet.",
         private val reset: String = "&aThe cooldown and limit of {1}&a start again for {0}.",
@@ -179,33 +184,5 @@ data class MessageConfig(
         fun freeVoucher(voucher: String): String = freeVoucher.formatArgs(voucher)
         fun notOnline(player: String): String = notOnline.formatArgs(player)
         fun ago(time: String): String = ago.formatArgs(time)
-    }
-
-    /** The units of a time such as "1 hour 5 minutes". */
-    @Serializable
-    data class Words(
-        val day: String = "day",
-        val days: String = "days",
-        val hour: String = "hour",
-        val hours: String = "hours",
-        val minute: String = "minute",
-        val minutes: String = "minutes",
-        val second: String = "second",
-        val seconds: String = "seconds",
-    ) {
-        /** [totalSeconds] as words, such as "1 hour 5 minutes"; "0 seconds" for nothing. */
-        fun duration(totalSeconds: Long): String {
-            var left = totalSeconds.coerceAtLeast(0)
-            val parts = ArrayList<String>(4)
-            for ([size, one, many] in units) {
-                val count = left / size
-                left %= size
-                if (count > 0) parts += "$count ${if (count == 1L) one else many}"
-            }
-            return parts.joinToString(" ").ifEmpty { "0 $seconds" }
-        }
-
-        private val units: List<Triple<Long, String, String>>
-            get() = [Triple(86_400L, day, days), Triple(3_600L, hour, hours), Triple(60L, minute, minutes), Triple(1L, second, seconds)]
     }
 }
