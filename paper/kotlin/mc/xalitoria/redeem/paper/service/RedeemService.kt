@@ -32,6 +32,11 @@ class RedeemService(private val plugin: XaliRedeem) {
 
     private val holdings = ConcurrentHashMap<UUID, Map<String, Holding>>()
 
+    /** What players who are not online here hold, as the database had it when it was last read in the background; for the placeholders. */
+    private val offline = OfflineCache<Map<String, Holding>>(plugin.scope, { OFFLINE_MAX_AGE_MILLIS }, { player, e -> plugin.logger.warning("Could not read the vouchers of $player: ${e.message}") }) {
+        HoldingRepository.of(it)
+    }
+
     /** Players whose redeem has not finished, so a double click cannot start a second one. */
     private val busy = ConcurrentHashMap.newKeySet<UUID>()
 
@@ -40,6 +45,15 @@ class RedeemService(private val plugin: XaliRedeem) {
     // --- What a player holds -------------------------------------------------------------------------------
 
     fun holding(player: UUID, voucher: String): Holding = holdings[player]?.get(voucher) ?: Holding.NONE
+
+    /**
+     * Everything [player] holds, by voucher, for a placeholder: from memory for a player who is online here, and for anyone else what
+     * the database held when it was last read in the background. Null until that first read is done.
+     */
+    fun held(player: UUID): Map<String, Holding>? = holdings[player] ?: offline.get(player)?.let { it.value ?: emptyMap() }
+
+    /** Called on a timer: drops what was read of players who nobody has asked about lately. */
+    fun sweep() = offline.sweep()
 
     /** Reads what [player] has from the database. Off the region thread. */
     suspend fun load(player: UUID) {
@@ -50,11 +64,13 @@ class RedeemService(private val plugin: XaliRedeem) {
 
     /** A player who is online has changed, or may have changed, in the database (a give or take, perhaps on another server). */
     fun refresh(player: UUID) {
+        offline.invalidate(player)
         if (holdings.containsKey(player)) plugin.scope.launch { runCatching { load(player) }.onFailure { plugin.logger.fail("Failed to read the vouchers of $player", it) } }
     }
 
     fun forget(player: UUID) {
         holdings.remove(player)
+        offline.invalidate(player)
         busy.remove(player)
     }
 
@@ -64,16 +80,44 @@ class RedeemService(private val plugin: XaliRedeem) {
     // --- Can they redeem -----------------------------------------------------------------------------------
 
     fun status(player: Player, voucher: Voucher, now: Long = System.currentTimeMillis()): Status {
-        val held = holding(player.uniqueId, voucher.id)
+        heldStatus(holding(player.uniqueId, voucher.id), voucher, now)?.let { return it }
+        for (condition in voucher.config.conditions) {
+            if (!condition.test(player)) return Status.Blocked(msg.conditions.failure(condition, msg.words))
+        }
+        return Status.Ready
+    }
+
+    /** What stands in the way of redeeming [voucher] given what is [held] of it: the rules that need no player. Null when nothing does. */
+    private fun heldStatus(held: Holding, voucher: Voucher, now: Long): Status? {
         val max = voucher.config.maxRedemptions
         if (voucher.needsHeld && held.amount < 1) return Status.NotHeld
         if (max > 0 && held.redeemed >= max) return Status.LimitReached
         val cooldown = voucher.cooldown.inWholeMilliseconds
         if (cooldown > 0 && held.last > 0 && now < held.last + cooldown) return Status.Cooling(held.last + cooldown - now)
-        for (condition in voucher.config.conditions) {
-            if (!condition.test(player)) return Status.Blocked(msg.conditions.failure(condition, msg.words))
+        return null
+    }
+
+    /**
+     * [status] for a player who is not online, for a placeholder. The conditions of a voucher test a player (a permission, a world,
+     * a placeholder), so they cannot be tested and are left out: what is told is what holding, the limit and the cooldown say.
+     * Null until what the player holds has been read.
+     */
+    fun statusOf(player: UUID, voucher: Voucher, now: Long = System.currentTimeMillis()): Status? {
+        val held = held(player) ?: return null
+        return heldStatus(held[voucher.id] ?: Holding.NONE, voucher, now) ?: Status.Ready
+    }
+
+    /** How many vouchers a player who is not online is to see, by the same rules as [entries] but without the conditions; null until read. */
+    fun visibleTo(player: UUID): Int? {
+        val now = System.currentTimeMillis()
+        val held = held(player) ?: return null
+        return vouchers.values.count { voucher ->
+            when (voucher.config.show) {
+                Show.ALWAYS -> true
+                Show.HELD -> voucher.free || (held[voucher.id]?.amount ?: 0) > 0
+                Show.READY -> (heldStatus(held[voucher.id] ?: Holding.NONE, voucher, now)) == null
+            }
         }
-        return Status.Ready
     }
 
     /** What [status] says, as the text of the menu and the list. */
@@ -205,5 +249,9 @@ class RedeemService(private val plugin: XaliRedeem) {
     private fun onPlayer(player: Player, after: Runnable?, task: () -> Unit) {
         player.scheduler.run(plugin, { try { task() } finally { after?.run(); busy.remove(player.uniqueId) } }, { busy.remove(player.uniqueId) })
             ?: busy.remove(player.uniqueId)
+    }
+
+    private companion object {
+        const val OFFLINE_MAX_AGE_MILLIS = 30_000L
     }
 }

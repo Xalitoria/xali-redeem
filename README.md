@@ -188,6 +188,12 @@ particular voucher is up to its conditions.
 
 PlaceholderAPI answers from memory (what is known of players who are online), never from the database.
 
+They also work for a player who is not online. The first request for such a player reads what they hold in the background and
+answers with nothing until it is there; after that the answer comes from memory, is read again when it is 30 seconds old while it
+keeps being asked for, and is dropped when nobody has asked for ten minutes. A voucher's conditions test a player who is online
+(a permission, a world, another placeholder), so for one who is not they are left out: `count`, `ready`, `status` and `cooldown`
+say what holding it, `max-redemptions` and `cooldown` allow.
+
 | Placeholder | Is |
 |---|---|
 | `%xaliredeem_total%` | How many vouchers of every kind the player holds. |
@@ -245,6 +251,7 @@ What they cannot show (the plugin on a Folia server with XaliMenu, a player clic
 | Test | Covers |
 |---|---|
 | `VoucherFiles` | Reading voucher files, the bundled example and misspelled keys. |
+| `OfflineReads` | What the placeholders keep of a player who is not online: empty until the first read, a player with no row, a read again when it is old or invalid, a read that fails, and a player who is forgotten. |
 | `HoldingStore` | The database rules: holding, giving, taking, cooldowns, limits, giving back, and redeems racing for the last voucher. |
 | `ConfigFile` | The defaults and wrong values of `config.yml`. |
 

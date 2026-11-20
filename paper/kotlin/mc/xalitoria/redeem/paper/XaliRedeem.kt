@@ -7,6 +7,8 @@ import com.xalitoria.util.message.*
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mc.xalitoria.redeem.paper.command.RedeemCommand
 import mc.xalitoria.redeem.paper.data.config.MainConfig
@@ -21,6 +23,7 @@ import mc.xalitoria.redeem.paper.voucher.Vouchers
 import org.bukkit.permissions.Permission
 import org.bukkit.permissions.PermissionDefault
 import org.bukkit.plugin.java.JavaPlugin
+import kotlin.time.Duration.Companion.minutes
 
 class XaliRedeem : JavaPlugin() {
     lateinit var config: YamlFile<MainConfig>
@@ -79,7 +82,16 @@ class XaliRedeem : JavaPlugin() {
         // Players already online (a plugin reload) have their vouchers read now.
         server.onlinePlayers.forEach { player -> scope.launch { runCatching { service.load(player.uniqueId) } } }
 
-        if (hasPlaceholders) expansion = RedeemExpansion(this).also { it.register() }
+        if (hasPlaceholders) {
+            expansion = RedeemExpansion(this).also { it.register() }
+            // What the placeholders read of players who are not online is dropped once nobody asks for it.
+            scope.launch {
+                while (isActive) {
+                    delay(5.minutes)
+                    service.sweep()
+                }
+            }
+        }
         enableMenu()
 
         val command = RedeemCommand(this)
