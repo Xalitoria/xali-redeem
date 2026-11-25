@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import mc.xalitoria.redeem.paper.XaliRedeem
 import mc.xalitoria.redeem.paper.XaliRedeem.Companion.debug
 import mc.xalitoria.redeem.paper.data.db.tables.HoldingTable
+import mc.xalitoria.redeem.paper.data.db.tables.PendingRewardTable
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
@@ -57,7 +58,7 @@ object DatabaseManager {
         debug("Attaching database: prefix='{0}'", tablePrefix)
 
         transaction(database) {
-            MigrationUtils.statementsRequiredForDatabaseMigration(HoldingTable, withLogs = false)
+            MigrationUtils.statementsRequiredForDatabaseMigration(HoldingTable, PendingRewardTable, withLogs = false)
                 .onEach { debug("Schema statement: {0}", it) }
                 .forEach { exec(it) }
         }

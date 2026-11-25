@@ -44,4 +44,4 @@ plugins {
 }
 
 rootProject.name = "redeem"
-include("paper")
+include("api", "paper")

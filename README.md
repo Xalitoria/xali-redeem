@@ -27,12 +27,13 @@ the vouchers in chat, each one a click away from being redeemed, and everything 
 | Plugin | Needed | Purpose |
 |---|---|---|
 | XaliMenu | No | The voucher menu, turned on with `menu.enabled` (on by default). It needs PlaceholderAPI too, which it requires itself. |
-| PlaceholderAPI | No | The `%xaliredeem_...%` placeholders, which the menu reads the vouchers' text from; `placeholder` conditions; placeholders in rewards. |
+| PlaceholderAPI | No | The `%xredeem_...%` placeholders, which the menu reads the vouchers' text from; `placeholder` conditions; placeholders in rewards. |
 
 ### Modules
 
 | Module | Description |
 |---|---|
+| `redeem/api` | `net.xalitoria.redeem`: what other plugins compile against (`XaliRedeemApi`, `PendingReward`, `StoredReward`). Shaded into the plugin jar. |
 | `redeem/paper` | `mc.xalitoria.redeem.paper`: the plugin, `xali-redeem-<version>-paper.jar`. |
 
 ### Building and installing
@@ -155,11 +156,12 @@ can use them:
 
 | What | Name | Does |
 |---|---|---|
-| Catalog | `xaliredeem:vouchers` | The vouchers the player can see, one element each, with `{id}`, `{name}`, `{material}`, `{amount}`, `{redeemed}` and `{ready}`. |
-| Action | `xaliredeem:redeem`, `voucher = "{id}"` | Redeems that voucher and draws the menu again. |
+| Catalog | `xaliredeem:vouchers` | The vouchers and dynamic pending rewards (`pending:<id>`) the player can see, one element each, with `{id}`, `{name}`, `{material}`, `{amount}`, `{redeemed}`, `{ready}` and `{pending}`. |
+| Action | `xaliredeem:redeem`, `voucher = "{id}"` | Redeems that voucher or claims that pending reward and draws the menu again. |
+| Item source | `xaliredeem:pending/<id>` | Resolves to the exact icon or first item of a stored dynamic pending reward. |
 
 XaliMenu shows an element's values as plain text, **without colors**, so the item template reads the vouchers' formatted text from
-placeholders instead: `%xaliredeem_name_{id}%`, `%xaliredeem_description_{id}_1%` and `%xaliredeem_status_{id}%`. The menu does
+placeholders instead: `%xredeem_name_{id}%`, `%xredeem_description_{id}_1%` and `%xredeem_status_{id}%`. The menu does
 not need `commands` (`register = false`): `/redeem` opens it.
 
 ## Usage
@@ -172,11 +174,13 @@ not need `commands` (`register = false`): `/redeem` opens it.
 |---|---|---|
 | `/redeem` | `xaliredeem.use` | Opens the menu, or lists the vouchers when there is no menu. |
 | `/redeem <voucher>` | `xaliredeem.use` | Redeems a voucher. |
-| `/redeem list [page]` | `xaliredeem.use` | The player's vouchers in chat; click one to redeem it. |
+| `/redeem list [page]` | `xaliredeem.use` | The player's vouchers and pending rewards in chat; click one to redeem it. |
+| `/redeem all` | `xaliredeem.use` | Claims all ready dynamic pending rewards that fit in the player's inventory. |
 | `/redeem menu` | `xaliredeem.use` | Opens the menu; says so when it is not on. |
 | `/redeem admin give <player> <voucher> [amount]` | `xaliredeem.admin` | Gives vouchers; the player is told. A player who has never been on this server can be named by UUID. |
 | `/redeem admin take <player> <voucher> [amount]` | `xaliredeem.admin` | Takes up to that many. |
 | `/redeem admin balance <player>` | `xaliredeem.admin` | What the player holds, how often they redeemed each voucher and when last. |
+| `/redeem admin pending <player>` | `xaliredeem.admin` | Lists a player's stored dynamic pending rewards (from other plugins such as XaliCrates). |
 | `/redeem admin reset <player> <voucher>` | `xaliredeem.admin` | Starts the cooldown and limit of that voucher again. |
 | `/redeem admin open <player>` | `xaliredeem.admin` | Opens the menu for a player (a console can use it from an NPC or a crate). |
 | `/redeem admin reload`, `debug` | `xaliredeem.admin` | Reload the files; toggle the debug log. |
@@ -196,18 +200,23 @@ say what holding it, `max-redemptions` and `cooldown` allow.
 
 | Placeholder | Is |
 |---|---|
-| `%xaliredeem_total%` | How many vouchers of every kind the player holds. |
-| `%xaliredeem_count%` | How many vouchers the player can see. |
-| `%xaliredeem_amount_<id>%`, `%xaliredeem_redeemed_<id>%` | How many of it they hold, and how often they redeemed it. |
-| `%xaliredeem_ready_<id>%` | `true` when they can redeem it now. |
-| `%xaliredeem_status_<id>%` | What stands in the way, or "Click to redeem" (colored). |
-| `%xaliredeem_cooldown_<id>%` | Seconds before they can redeem it again; 0 when they can. |
-| `%xaliredeem_name_<id>%`, `%xaliredeem_description_<id>_<line>%` | The voucher's text, with its colors; the line counts from 1. |
+| `%xredeem_total%` | How many vouchers and pending rewards the player holds. |
+| `%xredeem_pending%` | How many dynamic pending rewards the player holds. |
+| `%xredeem_count%` | How many vouchers and pending rewards the player can see. |
+| `%xredeem_amount_<id>%`, `%xredeem_redeemed_<id>%` | How many of it they hold, and how often they redeemed it. |
+| `%xredeem_ready_<id>%` | `true` when they can redeem it now. |
+| `%xredeem_status_<id>%` | What stands in the way, or "Click to redeem" (colored). |
+| `%xredeem_cooldown_<id>%` | Seconds before they can redeem it again; 0 when they can. |
+| `%xredeem_name_<id>%`, `%xredeem_description_<id>_<line>%` | The voucher's text, with its colors; the line counts from 1. |
 
 ### Handing out vouchers from other plugins
 
-There is no API to compile against: run `/xaliredeem admin give {player} <voucher> [amount]` as the console, from a vote reward
-([XaliVote](../vote/README.md)), a shop, a crate, a referral completion ([XaliRefer](../refer/README.md)) or a menu action.
+Other plugins can either compile against `redeem/api` (`libs.xali.redeem.api`, `net.xalitoria.redeem.XaliRedeemApi`, found in Bukkit's services manager) or run `/xaliredeem admin give {player} <voucher> [amount]` as the console.
+
+Through `XaliRedeemApi`, a plugin can:
+
+- Give or take static vouchers (`giveVoucher`, `takeVoucher`, `getVoucherAmount`).
+- Store ad-hoc dynamic rewards that are **not** defined in `vouchers/*.yml` (`giveReward`, `giveItem`, `giveItems`) — for example, full-inventory overflow items or custom rewards from [XaliCrates](../crates/README.md). Stored items, icons, commands and messages persist in `<prefix>pending`, appear alongside vouchers in `/redeem` and the XaliMenu menu, and claim atomically when the player has free inventory space.
 For example, in XaliVote's `rewards.yml`:
 
 **File** `plugins/XaliVote/rewards.yml`
@@ -269,7 +278,7 @@ What they cannot show (the plugin on a Folia server with XaliMenu, a player clic
 
 > [!NOTE]
 > XaliMenu strips colors from the values of a catalog. Formatted text (the name, the description, the status) reaches the
-> menu through `%xaliredeem_...%` placeholders, not through `{name}`.
+> menu through `%xredeem_...%` placeholders, not through `{name}`.
 
 ## See also
 

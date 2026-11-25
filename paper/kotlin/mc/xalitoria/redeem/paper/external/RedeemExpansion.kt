@@ -1,27 +1,17 @@
 package mc.xalitoria.redeem.paper.external
 
 import mc.xalitoria.redeem.paper.XaliRedeem
+import mc.xalitoria.redeem.paper.service.PendingEntry
 import mc.xalitoria.redeem.paper.voucher.Status
 import me.clip.placeholderapi.expansion.PlaceholderExpansion
 import org.bukkit.OfflinePlayer
 
 /**
- * `%xaliredeem_...%`, answered from memory (what the plugin knows of players who are online, and what it last read of the others
- * in the background), never from the database. `<id>` is a voucher's name. The ones about a voucher are empty for a voucher that
- * does not exist.
- *
- * A player who is not online has no thread to test a voucher's conditions on, so for one the conditions are left out of `count`,
- * `ready`, `status` and `cooldown`: they say what holding, the limit and the cooldown allow. The first request for such a player
- * answers with nothing, as it reads what they hold.
- *
- * - `total`: how many vouchers the player holds. `count`: how many vouchers they can see.
- * - `amount_<id>`, `redeemed_<id>`: how many of it they hold, and how often they redeemed it.
- * - `ready_<id>`: `true` if they can redeem it now. `status_<id>`: what stands in the way, or "Click to redeem" (colored text).
- * - `cooldown_<id>`: seconds before they can redeem it again, 0 if they can.
- * - `name_<id>`, `description_<id>_<line>`: the voucher's text, with its colors. The line counts from 1, and is empty past the last.
+ * `%xredeem_...%`, answered from memory (what the plugin knows of players who are online, and what it last read of the others
+ * in the background), never from the database. `<id>` is a voucher's name or `pending:<id>` for a stored dynamic reward.
  */
 class RedeemExpansion(private val plugin: XaliRedeem) : PlaceholderExpansion() {
-    override fun getIdentifier() = "xaliredeem"
+    override fun getIdentifier() = "xredeem"
     override fun getAuthor() = "audizian"
     override fun getVersion() = plugin.pluginMeta.version
     override fun persist() = true
@@ -32,23 +22,46 @@ class RedeemExpansion(private val plugin: XaliRedeem) : PlaceholderExpansion() {
         val key = params.substringBefore('_').lowercase()
         val rest = params.substringAfter('_', "")
         when (key) {
-            "total" -> return if (offline == null) "0" else service.held(offline.uniqueId)?.values?.sumOf { it.amount }?.toString().orEmpty()
+            "total" -> return if (offline == null) "0" else {
+                val staticTotal = service.held(offline.uniqueId)?.values?.sumOf { it.amount }
+                if (staticTotal == null) "" else (staticTotal + service.pendingCount(offline.uniqueId)).toString()
+            }
+            "pending" -> return if (offline == null) "0" else service.pendingCount(offline.uniqueId).toString()
             "count" -> return when {
                 offline == null -> "0"
-                player != null -> service.entries(player).size.toString()
+                player != null -> (service.entries(player).size + service.pendingCount(player.uniqueId)).toString()
                 else -> service.visibleTo(offline.uniqueId)?.toString().orEmpty()
             }
         }
         if (key == "description") {
-            val voucher = service.vouchers[rest.substringBeforeLast('_').lowercase()] ?: return ""
+            val targetId = rest.substringBeforeLast('_')
             val line = rest.substringAfterLast('_').toIntOrNull() ?: return null
+            if (targetId.startsWith(PendingEntry.PENDING_PREFIX, ignoreCase = true)) {
+                val rewardId = targetId.substring(PendingEntry.PENDING_PREFIX.length).toLongOrNull() ?: return ""
+                val stored = service.pendingById(rewardId) ?: return ""
+                return stored.reward.description.getOrNull(line - 1).orEmpty()
+            }
+            val voucher = service.vouchers[targetId.lowercase()] ?: return ""
             return voucher.config.description.getOrNull(line - 1).orEmpty()
+        }
+        if (rest.startsWith(PendingEntry.PENDING_PREFIX, ignoreCase = true)) {
+            val rewardId = rest.substring(PendingEntry.PENDING_PREFIX.length).toLongOrNull() ?: return ""
+            val stored = service.pendingById(rewardId) ?: return ""
+            val status = if (player != null) service.pendingStatus(player, stored) else Status.Ready
+            return when (key) {
+                "name" -> stored.reward.title
+                "amount" -> stored.reward.items.sumOf { it.amount }.coerceAtLeast(1).toString()
+                "redeemed" -> "0"
+                "ready" -> (status == Status.Ready).toString()
+                "status" -> service.describe(status)
+                "cooldown" -> "0"
+                else -> null
+            }
         }
         val voucher = service.vouchers[rest.lowercase()] ?: return when (key) {
             "name", "amount", "redeemed", "ready", "status", "cooldown" -> ""
             else -> null
         }
-        // Where the player is not online here, what is known of them is what was read in the background: empty until that is done.
         val status by lazy {
             when {
                 offline == null -> null

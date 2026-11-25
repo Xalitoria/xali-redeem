@@ -16,6 +16,7 @@ import mc.xalitoria.redeem.paper.XaliRedeem
 import mc.xalitoria.redeem.paper.XaliRedeem.Companion.debug
 import mc.xalitoria.redeem.paper.data.constants.Permissions
 import mc.xalitoria.redeem.paper.data.db.repository.HoldingRepository
+import mc.xalitoria.redeem.paper.data.db.repository.PendingRewardRepository
 import mc.xalitoria.redeem.paper.voucher.Voucher
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
@@ -45,12 +46,15 @@ class RedeemCommand(private val plugin: XaliRedeem) {
             .then(page().executes { run(it) { sender -> withSelf(sender) { player -> list(player, it.getArgument("page", Int::class.java)) } } })
         )
         .then(Commands.literal("menu").executes { run(it) { sender -> withSelf(sender) { player -> openMenu(player, listInstead = false) } } })
+        .then(Commands.literal("all").executes { run(it) { sender -> withSelf(sender) { player -> service.claimAllPending(player) } } })
         .then(admin())
-        // Last, so that the words above are the commands and any other word is a voucher.
+        // Last, so that the words above are the commands and any other word is a voucher or pending:<id>.
         .then(Commands.argument("voucher", StringArgumentType.word())
             .suggests { context, builder ->
                 val player = context.source.sender as? Player
-                val names = if (player == null) service.vouchers.keys else service.entries(player).map { it.voucher.id }
+                val names = if (player == null) service.vouchers.keys else {
+                    service.entries(player).map { it.voucher.id } + service.pendingEntries(player).map { it.syntheticId }
+                }
                 names.filter { it.startsWith(builder.remaining, ignoreCase = true) }.forEach(builder::suggest)
                 builder.buildFuture()
             }
@@ -74,6 +78,9 @@ class RedeemCommand(private val plugin: XaliRedeem) {
         )
         .then(Commands.literal("balance")
             .then(playerArgument().executes { run(it) { sender -> balance(sender, it.getArgument("player", String::class.java)) } })
+        )
+        .then(Commands.literal("pending")
+            .then(playerArgument().executes { run(it) { sender -> pending(sender, it.getArgument("player", String::class.java)) } })
         )
         .then(Commands.literal("reset")
             .then(playerArgument().then(voucherArgument().executes { run(it) { sender -> reset(sender, it.getArgument("player", String::class.java), it.getArgument("voucher", String::class.java)) } }))
@@ -177,18 +184,27 @@ class RedeemCommand(private val plugin: XaliRedeem) {
         }
     }
 
-    /** The vouchers [player] can see, a page at a time, each one a click away from being redeemed. */
+    /** The vouchers and pending rewards [player] can see, a page at a time, each one a click away from being redeemed. */
     private fun list(player: Player, page: Int) {
         val perPage = plugin.config.data.perPage
-        val entries = service.entries(player).sortedBy { it.voucher.id }
-        val pages = max(1, (entries.size + perPage - 1) / perPage)
+        data class Row(val id: String, val name: String, val amount: Int, val status: String)
+        val rows = buildList {
+            for (p in service.pendingEntries(player)) {
+                val count = p.stored.reward.items.sumOf { it.amount }.coerceAtLeast(1)
+                add(Row(p.syntheticId, p.stored.reward.title, count, service.describe(p.status)))
+            }
+            for (entry in service.entries(player).sortedBy { it.voucher.id }) {
+                add(Row(entry.voucher.id, entry.voucher.name, entry.holding.amount, service.describe(entry.status)))
+            }
+        }
+        val pages = max(1, (rows.size + perPage - 1) / perPage)
         val shown = page.coerceIn(1, pages)
         player send msg.list.header(shown, pages)
-        if (entries.isEmpty()) player send msg.list.empty
-        for (entry in entries.drop((shown - 1) * perPage).take(perPage)) {
+        if (rows.isEmpty()) player send msg.list.empty
+        for (row in rows.drop((shown - 1) * perPage).take(perPage)) {
             player.sendMessage(
-                msg.list.entry(entry.voucher.name, entry.holding.amount, service.describe(entry.status)).toComponent()
-                    .clickEvent(ClickEvent.runCommand("/$label ${entry.voucher.id}"))
+                msg.list.entry(row.name, row.amount, row.status).toComponent()
+                    .clickEvent(ClickEvent.runCommand("/$label ${row.id}"))
                     .hoverEvent(HoverEvent.showText(msg.list.clickToRedeem.toComponent()))
             )
         }
@@ -227,6 +243,16 @@ class RedeemCommand(private val plugin: XaliRedeem) {
         for ([id, held] in rows) {
             val last = if (held.last > 0) msg.admin.ago(msg.words.duration((now - held.last) / 1000)) else msg.admin.never
             sender send msg.admin.balanceEntry(service.vouchers[id]?.id ?: id, held.amount, held.redeemed, last)
+        }
+    }
+
+    private fun pending(sender: CommandSender, name: String) = async(sender) {
+        val target = resolve(name) ?: return@async sender fail msg.commands.playerNotFound(name)
+        val records = PendingRewardRepository.listUnclaimed(target.uuid)
+        sender send msg.admin.pendingHeader(target.name)
+        if (records.isEmpty()) sender send msg.admin.pendingEmpty
+        for (record in records) {
+            sender send msg.admin.pendingEntry(record.id, record.title, record.itemBytes.size, record.source ?: "api")
         }
     }
 

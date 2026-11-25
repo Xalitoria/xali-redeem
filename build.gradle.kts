@@ -11,10 +11,11 @@ plugins {
 subprojects {
     // Named for the package of what the module holds, see the Packages section of the root README.
     group = when (name) {
+        "api" -> "net.xalitoria.redeem"
         "paper" -> "mc.xalitoria.redeem.paper"
         else -> error("No group for $path")
     }
-    version = "0.3.0"
+    version = "0.5.0"
 }
 
 tasks.named("build") {

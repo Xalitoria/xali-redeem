@@ -1,9 +1,13 @@
+import mc.xalitoria.gradle.sibling
+
 plugins {
     kotlin("plugin.serialization")
     alias(libs.plugins.shadow)
 }
 
 dependencies {
+    // Other plugins use the API's classes from this jar, whether or not the plugin itself does.
+    implementation(sibling("api"))
     // Libraries the server downloads when the plugin loads (see loader.json); nothing declared here is shaded.
     api(libs.xalicraft.util)
     api(libs.bundles.database)
@@ -27,7 +31,9 @@ tasks.test {
 tasks {
     jar { enabled = false }
     shadowJar {
-        minimize()
+        minimize {
+            exclude(project(sibling("api").path))
+        }
     }
     build {
         dependsOn(shadowJar)

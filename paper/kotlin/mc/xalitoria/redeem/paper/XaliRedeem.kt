@@ -10,6 +10,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import mc.xalitoria.redeem.paper.api.RedeemApiImpl
 import mc.xalitoria.redeem.paper.command.RedeemCommand
 import mc.xalitoria.redeem.paper.data.config.MainConfig
 import mc.xalitoria.redeem.paper.data.config.MessageConfig
@@ -20,8 +21,10 @@ import mc.xalitoria.redeem.paper.external.RedeemExpansion
 import mc.xalitoria.redeem.paper.listener.PlayerListener
 import mc.xalitoria.redeem.paper.service.RedeemService
 import mc.xalitoria.redeem.paper.voucher.Vouchers
+import net.xalitoria.redeem.XaliRedeemApi
 import org.bukkit.permissions.Permission
 import org.bukkit.permissions.PermissionDefault
+import org.bukkit.plugin.ServicePriority
 import org.bukkit.plugin.java.JavaPlugin
 import kotlin.time.Duration.Companion.minutes
 
@@ -77,6 +80,7 @@ class XaliRedeem : JavaPlugin() {
 
         hasPlaceholders = pm.isPluginEnabled("PlaceholderAPI")
         service = RedeemService(this)
+        server.servicesManager.register(XaliRedeemApi::class.java, RedeemApiImpl(this), this, ServicePriority.Normal)
         loadVouchers()
         pm.registerEvents(PlayerListener(this), this)
         // Players already online (a plugin reload) have their vouchers read now.
@@ -102,6 +106,7 @@ class XaliRedeem : JavaPlugin() {
     }
 
     override fun onDisable() {
+        server.servicesManager.unregisterAll(this)
         expansion?.unregister()
         if (::scope.isInitialized) scope.cancel("XaliRedeem is disabling")
         DatabaseManager.close()

@@ -42,13 +42,15 @@ data class MessageConfig(
         private val help: String = """
             $HEAD &dHELP
             &d/{0} &r- open the voucher menu (or list your vouchers)
-            &d/{0} &rlist [page] &7- your vouchers in chat
+            &d/{0} &rlist [page] &7- your vouchers and pending rewards in chat
+            &d/{0} &rall &7- claim all ready pending rewards
             &d/{0} &r<voucher> &7- redeem a voucher
         """.trimIndent(),
         private val adminHelp: String = """
             &d/{0} &radmin give <player> <voucher> [amount] &7- give a player vouchers
             &d/{0} &radmin take <player> <voucher> [amount] &7- take vouchers away
             &d/{0} &radmin balance <player> &7- what a player holds and has used
+            &d/{0} &radmin pending <player> &7- list a player's stored pending rewards
             &d/{0} &radmin reset <player> <voucher> &7- start a player's cooldown and limit of a voucher again
             &d/{0} &radmin open <player> &7- open the menu for a player
             &d/{0} &radmin reload|debug
@@ -87,6 +89,16 @@ data class MessageConfig(
         private val redeemed: String = "$PREFIX&aYou redeemed {0}&a.",
         @SerialName("interrupted")
         private val interrupted: String = "&c{0}&c could not be redeemed and was given back to you.",
+        @SerialName("pending-received")
+        private val pendingReceived: String = "$PREFIX&a{0}&a was stored in &e/redeem&a for you to claim.",
+        @SerialName("pending-not-found")
+        val pendingNotFound: String = "&cThat pending reward is no longer available.",
+        @SerialName("pending-need-space")
+        private val pendingNeedSpace: String = "&cYou need {0} free inventory slots to claim {1}&c.",
+        @SerialName("pending-none-ready")
+        val pendingNoneReady: String = "&7No pending rewards could be claimed right now.",
+        @SerialName("pending-claimed-all")
+        private val pendingClaimedAll: String = "$PREFIX&aClaimed {0} pending rewards.",
     ) {
         fun unknownVoucher(id: String): String = unknownVoucher.formatArgs(id)
         fun notHeld(voucher: String): String = notHeld.formatArgs(voucher)
@@ -95,6 +107,9 @@ data class MessageConfig(
         fun notReady(voucher: String): String = notReady.formatArgs(voucher)
         fun redeemed(voucher: String): String = redeemed.formatArgs(voucher)
         fun interrupted(voucher: String): String = interrupted.formatArgs(voucher)
+        fun pendingReceived(title: String): String = pendingReceived.formatArgs(title)
+        fun pendingNeedSpace(slots: Int, title: String): String = pendingNeedSpace.formatArgs(slots, title)
+        fun pendingClaimedAll(count: Int): String = pendingClaimedAll.formatArgs(count)
     }
 
     /** What the menu and the list say about a voucher. They must not hold a `%`, which the menu takes out of what a catalog gives. */
@@ -160,6 +175,12 @@ data class MessageConfig(
         private val balanceEntry: String = "&d{0} &7holds &f{1}&7, redeemed &f{2}&7 times, last {3}",
         @SerialName("balance-empty")
         val balanceEmpty: String = "&7Nothing yet.",
+        @SerialName("pending-header")
+        private val pendingHeader: String = "$PREFIX&d{0}'s pending rewards",
+        @SerialName("pending-entry")
+        private val pendingEntry: String = "&d#{0} &f{1} &7({2} items, source: {3})",
+        @SerialName("pending-empty")
+        val pendingEmpty: String = "&7No pending rewards.",
         private val reset: String = "&aThe cooldown and limit of {1}&a start again for {0}.",
         @SerialName("nothing-to-reset")
         private val nothingToReset: String = "&c{0} has not used {1}&c.",
@@ -178,6 +199,8 @@ data class MessageConfig(
         fun received(amount: Int, voucher: String): String = received.formatArgs(amount, voucher)
         fun balanceHeader(player: String): String = balanceHeader.formatArgs(player)
         fun balanceEntry(voucher: String, held: Int, redeemed: Int, last: String): String = balanceEntry.formatArgs(voucher, held, redeemed, last)
+        fun pendingHeader(player: String): String = pendingHeader.formatArgs(player)
+        fun pendingEntry(id: Long, title: String, items: Int, source: String): String = pendingEntry.formatArgs(id, title, items, source)
         fun reset(player: String, voucher: String): String = reset.formatArgs(player, voucher)
         fun nothingToReset(player: String, voucher: String): String = nothingToReset.formatArgs(player, voucher)
         fun opened(player: String): String = opened.formatArgs(player)

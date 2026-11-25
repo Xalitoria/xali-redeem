@@ -31,7 +31,7 @@ data class MainConfig(
         val name: String = "redeem",
         @YamlComment(
             "Writes that file when it is missing, so it can be edited there. It lists the vouchers a page at a time; its item is the",
-            "template of each voucher, which reads the voucher's text from the %xaliredeem_...% placeholders.",
+            "template of each voucher, which reads the voucher's text from the %xredeem_...% placeholders.",
         )
         @SerialName("write-menu")
         val writeMenu: Boolean = true,
